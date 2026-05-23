@@ -8,6 +8,7 @@ import {
   EyeOff,
   Filter,
   Info,
+  Layers3,
   LocateFixed,
   MapPin,
   PanelLeftClose,
@@ -23,12 +24,12 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { OrbitalScene } from "./components/OrbitalScene";
-import { useObjectProfile, useOrbitCatalog, usePropagatedCatalog } from "./hooks/useOrbitCatalog";
+import { useObjectImage, useObjectProfile, useOrbitCatalog, usePropagatedCatalog } from "./hooks/useOrbitCatalog";
 import { buildObjectBrief, getProfileValue, riskLabel } from "./lib/insights";
 import { applyNaturalLanguageIntent, parseNaturalLanguageIntent } from "./lib/naturalLanguage";
 import { isLocationPassQuery, parseLocationQuery, predictPassForLocation } from "./lib/passPrediction";
 import { findNearestObjects, formatDecimal, formatKm, labelForOrbitClass, propagateObject } from "./lib/orbitMath";
-import type { ObjectType, OrbitClass, PassPrediction, PredictionMode, PropagatedOrbitObject } from "./types";
+import type { EarthMapStyle, ObjectType, OrbitClass, PassPrediction, PredictionMode, PropagatedOrbitObject } from "./types";
 
 const objectOptions: Array<"all" | ObjectType> = ["all", "payload", "debris", "rocket_body", "unknown"];
 const orbitOptions: Array<"all" | OrbitClass> = ["all", "LEO", "MEO", "GEO", "HEO", "Deep", "Unknown"];
@@ -60,8 +61,8 @@ const orbitFilterHelp = Object.entries(orbitHelp)
 
 export default function App() {
   const [provider] = useState<"celestrak" | "spacetrack">("celestrak");
-  const [preset] = useState("complete");
-  const [limit] = useState(60000);
+  const [preset] = useState("wide");
+  const [limit] = useState(12000);
   const [query, setQuery] = useState("");
   const [aiCommand, setAiCommand] = useState("");
   const [objectType, setObjectType] = useState<"all" | ObjectType>("all");
@@ -80,6 +81,10 @@ export default function App() {
   const [controlOpen, setControlOpen] = useState(true);
   const [catalogExpanded, setCatalogExpanded] = useState(true);
   const [clearView, setClearView] = useState(false);
+  const [mapStyle, setMapStyle] = useState<EarthMapStyle>("realistic");
+  const [showClouds, setShowClouds] = useState(true);
+  const [showSky, setShowSky] = useState(true);
+  const [showGrid, setShowGrid] = useState(false);
 
   const { catalog, meta, loading, error, refresh } = useOrbitCatalog(provider, preset, limit);
 
@@ -124,6 +129,7 @@ export default function App() {
     [filtered, propagated, selectedId]
   );
   const { profile, loading: profileLoading } = useObjectProfile(selected?.noradId ?? null);
+  const { image: objectImage, loading: imageLoading } = useObjectImage(selected);
   const nearest = useMemo(() => findNearestObjects(selected, propagated, 6), [selected, propagated]);
   const passLocation = useMemo(() => parseLocationQuery(predictionQuery), [predictionQuery]);
   const passSearchBucket = Math.floor(simDate.getTime() / 60_000);
@@ -175,6 +181,10 @@ export default function App() {
           prediction={selectedPrediction}
           predictionMode={predictionMode}
           passLocation={predictionMode === "location" ? passLocation : null}
+          mapStyle={mapStyle}
+          showClouds={showClouds}
+          showSky={showSky}
+          showGrid={showGrid}
           onHover={setHoveredId}
           onSelect={(object) => setSelectedId(object.noradId)}
         />
@@ -302,6 +312,45 @@ export default function App() {
                 />
               </div>
 
+              <PanelTitle
+                icon={<Layers3 size={18} />}
+                title="Earth Map"
+                compact
+                help="Scene display controls. Map styles use bundled textures and styling so the project stays deployable without paid map keys."
+              />
+              <label className="field">
+                <FieldLabel label="Map style" help="4K imagery uses the current Earth texture. Terrain increases relief and land contrast. Default is a cleaner atlas-style render." />
+                <select value={mapStyle} onChange={(event) => setMapStyle(event.target.value as EarthMapStyle)} aria-label="Earth map style">
+                  <option value="realistic">Current 4K</option>
+                  <option value="terrain">Terrain</option>
+                  <option value="default">Default map</option>
+                </select>
+              </label>
+
+              <div className="toggle-row">
+                <CatalogToggle
+                  active={showClouds}
+                  icon={<Layers3 size={16} />}
+                  label="Clouds"
+                  help="Toggle the cloud texture layer over Earth."
+                  onClick={() => setShowClouds((value) => !value)}
+                />
+                <CatalogToggle
+                  active={showSky}
+                  icon={<Sparkles size={16} />}
+                  label="Sky"
+                  help="Toggle the galaxy star background."
+                  onClick={() => setShowSky((value) => !value)}
+                />
+                <CatalogToggle
+                  active={showGrid}
+                  icon={<LocateFixed size={16} />}
+                  label="Lat/Lon"
+                  help="Toggle latitude and longitude reference lines on Earth."
+                  onClick={() => setShowGrid((value) => !value)}
+                />
+              </div>
+
               <div className="catalog-actions">
                 <button className="control-button reset-button" type="button" onClick={resetCatalog}>
                   <RotateCcw size={16} /> Reset catalog
@@ -342,6 +391,20 @@ export default function App() {
             <section className="brief-panel">
               <div><Sparkles size={17} /> AI Brief</div>
               <p>{brief}</p>
+            </section>
+
+            <section className="object-image-panel">
+              <h3>Reference Image</h3>
+              {imageLoading ? (
+                <div className="image-placeholder">Searching Wikimedia</div>
+              ) : objectImage?.imageUrl ? (
+                <a href={objectImage.pageUrl ?? objectImage.imageUrl} target="_blank" rel="noreferrer">
+                  <img src={objectImage.imageUrl} alt={objectImage.title ?? selected.name} />
+                  <span>{objectImage.title ?? selected.name}</span>
+                </a>
+              ) : (
+                <div className="image-placeholder">No verified public image found</div>
+              )}
             </section>
 
             <div className="metric-grid">

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { demoCatalog } from "../data/demoCatalog";
 import { propagateCatalog } from "../lib/orbitMath";
-import type { CatalogPayload, ObjectProfile, OrbitObject } from "../types";
+import type { CatalogPayload, ObjectImageResult, ObjectProfile, OrbitObject, PropagatedOrbitObject } from "../types";
 
 const storageKey = "earth-orbital-watch-ai-catalog-v3";
 
@@ -141,6 +141,64 @@ export function useObjectProfile(noradId: string | null) {
   }, [noradId]);
 
   return { profile, loading };
+}
+
+export function useObjectImage(object: PropagatedOrbitObject | null) {
+  const [image, setImage] = useState<ObjectImageResult | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!object) {
+      setImage(null);
+      setLoading(false);
+      return;
+    }
+
+    const selectedObject = object;
+    const controller = new AbortController();
+
+    async function loadImage() {
+      setLoading(true);
+
+      try {
+        const params = new URLSearchParams({
+          name: selectedObject.name,
+          type: selectedObject.objectType,
+          norad: selectedObject.noradId
+        });
+        const response = await fetch(`/api/object-image?${params.toString()}`, {
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          throw new Error(`Image lookup failed with ${response.status}`);
+        }
+
+        setImage((await response.json()) as ObjectImageResult);
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setImage({
+            title: null,
+            pageUrl: null,
+            imageUrl: null,
+            extract: null,
+            source: "none",
+            error: error instanceof Error ? error.message : "Image lookup failed."
+          });
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadImage();
+
+    return () => controller.abort();
+  }, [object?.noradId, object?.name, object?.objectType]);
+
+  return { image, loading };
 }
 
 function readCachedCatalog(provider: string, preset: string, limit: number): CatalogPayload | null {

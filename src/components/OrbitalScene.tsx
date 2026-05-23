@@ -3,7 +3,7 @@ import { Canvas, useFrame, useLoader, useThree, type ThreeEvent } from "@react-t
 import { memo, useEffect, useMemo, useRef, useState, type MutableRefObject, type RefObject } from "react";
 import * as THREE from "three";
 import { createOrbitTrail } from "../lib/orbitMath";
-import type { LocationTarget, PredictionMode, PropagatedOrbitObject, Vector3Tuple } from "../types";
+import type { EarthMapStyle, LocationTarget, PredictionMode, PropagatedOrbitObject, Vector3Tuple } from "../types";
 
 interface OrbitalSceneProps {
   objects: PropagatedOrbitObject[];
@@ -15,6 +15,10 @@ interface OrbitalSceneProps {
   prediction: PropagatedOrbitObject | null;
   predictionMode: PredictionMode;
   passLocation: LocationTarget | null;
+  mapStyle: EarthMapStyle;
+  showClouds: boolean;
+  showSky: boolean;
+  showGrid: boolean;
   onHover: (id: string | null) => void;
   onSelect: (object: PropagatedOrbitObject) => void;
 }
@@ -35,13 +39,13 @@ export function OrbitalScene(props: OrbitalSceneProps) {
         }
       }}
     >
-      <color attach="background" args={["#02030a"]} />
+      <color attach="background" args={[props.showSky ? "#02030a" : "#05070c"]} />
       <fog attach="fog" args={["#02030a", 7, 28]} />
       <ambientLight intensity={0.18} />
       <directionalLight position={[4.8, 2.8, 3.9]} intensity={3.2} color="#fff6df" />
       <pointLight position={[-3, -2, -5]} intensity={0.26} color="#7cb7ff" />
-      <GalaxyBackdrop />
-      <Earth passLocation={props.passLocation} />
+      {props.showSky ? <GalaxyBackdrop /> : null}
+      <Earth passLocation={props.passLocation} mapStyle={props.mapStyle} showClouds={props.showClouds} showGrid={props.showGrid} />
       <VisualObjectLayer
         objects={props.objects}
         selectedId={props.selected?.noradId ?? null}
@@ -79,7 +83,17 @@ export function OrbitalScene(props: OrbitalSceneProps) {
   );
 }
 
-const Earth = memo(function Earth({ passLocation }: { passLocation: LocationTarget | null }) {
+const Earth = memo(function Earth({
+  passLocation,
+  mapStyle,
+  showClouds,
+  showGrid
+}: {
+  passLocation: LocationTarget | null;
+  mapStyle: EarthMapStyle;
+  showClouds: boolean;
+  showGrid: boolean;
+}) {
   const earthTexture = useLoader(THREE.TextureLoader, "/textures/earth-day.jpg");
   const normalTexture = useLoader(THREE.TextureLoader, "/textures/earth-normal.jpg");
   const specularTexture = useLoader(THREE.TextureLoader, "/textures/earth-specular.jpg");
@@ -95,29 +109,45 @@ const Earth = memo(function Earth({ passLocation }: { passLocation: LocationTarg
       texture.wrapT = THREE.ClampToEdgeWrapping;
     }
   }, [earthTexture, normalTexture, specularTexture, cloudTexture]);
+  const styledTextures = useMemo(() => createEarthStyleTextures(earthTexture), [earthTexture]);
+  const surfaceTexture = mapStyle === "terrain" ? styledTextures.terrain : mapStyle === "default" ? styledTextures.defaultMap : earthTexture;
+
+  useEffect(
+    () => () => {
+      styledTextures.terrain.dispose();
+      styledTextures.defaultMap.dispose();
+    },
+    [styledTextures]
+  );
 
   useFrame((_, delta) => {
     if (groupRef.current) groupRef.current.rotation.y += delta * 0.018;
     if (cloudRef.current) cloudRef.current.rotation.y += delta * 0.028;
   });
 
+  const materialStyle = earthMaterialStyle(mapStyle);
+
   return (
     <group ref={groupRef}>
       <mesh>
         <sphereGeometry args={[1, 128, 96]} />
         <meshPhongMaterial
-          map={earthTexture}
-          normalMap={normalTexture}
-          normalScale={new THREE.Vector2(0.42, 0.42)}
-          specularMap={specularTexture}
-          specular={new THREE.Color("#223f5f")}
-          shininess={12}
+          key={mapStyle}
+          map={surfaceTexture}
+          color={materialStyle.color}
+          normalMap={mapStyle === "default" ? undefined : normalTexture}
+          normalScale={materialStyle.normalScale}
+          specularMap={mapStyle === "terrain" ? undefined : specularTexture}
+          specular={materialStyle.specular}
+          shininess={materialStyle.shininess}
         />
       </mesh>
-      <mesh ref={cloudRef} scale={1.014}>
-        <sphereGeometry args={[1, 128, 96]} />
-        <meshPhongMaterial map={cloudTexture} transparent opacity={0.38} depthWrite={false} />
-      </mesh>
+      {showClouds ? (
+        <mesh ref={cloudRef} scale={1.014}>
+          <sphereGeometry args={[1, 128, 96]} />
+          <meshPhongMaterial map={cloudTexture} transparent opacity={0.38} depthWrite={false} />
+        </mesh>
+      ) : null}
       <mesh scale={1.038}>
         <sphereGeometry args={[1, 128, 96]} />
         <meshBasicMaterial color="#67c7ff" transparent opacity={0.09} side={THREE.BackSide} />
@@ -126,10 +156,142 @@ const Earth = memo(function Earth({ passLocation }: { passLocation: LocationTarg
         <sphereGeometry args={[1, 128, 96]} />
         <meshBasicMaterial color="#4f9cff" transparent opacity={0.035} side={THREE.BackSide} />
       </mesh>
+      {showGrid ? <LatitudeLongitudeGrid /> : null}
       {passLocation ? <GroundMarker location={passLocation} /> : null}
     </group>
   );
 });
+
+function earthMaterialStyle(mapStyle: EarthMapStyle) {
+  if (mapStyle === "terrain") {
+    return {
+      color: new THREE.Color("#ffffff"),
+      normalScale: new THREE.Vector2(0.72, 0.72),
+      specular: new THREE.Color("#132118"),
+      shininess: 4
+    };
+  }
+
+  if (mapStyle === "default") {
+    return {
+      color: new THREE.Color("#ffffff"),
+      normalScale: new THREE.Vector2(0.12, 0.12),
+      specular: new THREE.Color("#1b3552"),
+      shininess: 7
+    };
+  }
+
+  return {
+    color: new THREE.Color("#ffffff"),
+    normalScale: new THREE.Vector2(0.42, 0.42),
+    specular: new THREE.Color("#223f5f"),
+    shininess: 12
+  };
+}
+
+function createEarthStyleTextures(source: THREE.Texture) {
+  const terrain = createStyledEarthTexture(source, "terrain");
+  const defaultMap = createStyledEarthTexture(source, "default");
+  return { terrain, defaultMap };
+}
+
+function createStyledEarthTexture(source: THREE.Texture, style: "terrain" | "default") {
+  const image = source.image as CanvasImageSource & { width?: number; height?: number };
+  const sourceWidth = Number(image.width) || 2048;
+  const sourceHeight = Number(image.height) || 1024;
+  const width = Math.min(2048, sourceWidth);
+  const height = Math.round(width * (sourceHeight / sourceWidth));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return source.clone();
+  }
+
+  context.drawImage(image, 0, 0, width, height);
+  const frame = context.getImageData(0, 0, width, height);
+  const data = frame.data;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const red = data[index];
+    const green = data[index + 1];
+    const blue = data[index + 2];
+    const light = red * 0.299 + green * 0.587 + blue * 0.114;
+    const water = blue > red * 1.12 && blue > green * 1.04;
+
+    if (style === "terrain") {
+      if (water) {
+        data[index] = Math.round(14 + light * 0.12);
+        data[index + 1] = Math.round(48 + light * 0.2);
+        data[index + 2] = Math.round(78 + light * 0.34);
+      } else {
+        const high = light > 142;
+        data[index] = Math.round((high ? 188 : 94) + light * 0.28);
+        data[index + 1] = Math.round((high ? 172 : 112) + light * 0.22);
+        data[index + 2] = Math.round((high ? 124 : 70) + light * 0.14);
+      }
+    } else if (water) {
+      data[index] = Math.round(21 + light * 0.1);
+      data[index + 1] = Math.round(84 + light * 0.15);
+      data[index + 2] = Math.round(132 + light * 0.22);
+    } else {
+      data[index] = Math.round(112 + light * 0.32);
+      data[index + 1] = Math.round(150 + light * 0.28);
+      data[index + 2] = Math.round(92 + light * 0.12);
+    }
+  }
+
+  context.putImageData(frame, 0, 0);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function LatitudeLongitudeGrid() {
+  const lines = useMemo(() => {
+    const items: Vector3Tuple[][] = [];
+    for (let latitude = -60; latitude <= 60; latitude += 30) {
+      items.push(createLatitudeLine(latitude));
+    }
+
+    for (let longitude = -180; longitude < 180; longitude += 30) {
+      items.push(createLongitudeLine(longitude));
+    }
+
+    return items;
+  }, []);
+
+  return (
+    <group>
+      {lines.map((points, index) => (
+        <Line key={index} points={points} color="#d8f3ff" lineWidth={0.7} transparent opacity={0.26} />
+      ))}
+    </group>
+  );
+}
+
+function createLatitudeLine(latitude: number) {
+  const points: Vector3Tuple[] = [];
+  for (let longitude = -180; longitude <= 180; longitude += 4) {
+    points.push(latLonToSphere(latitude, longitude, 1.018));
+  }
+  return points;
+}
+
+function createLongitudeLine(longitude: number) {
+  const points: Vector3Tuple[] = [];
+  for (let latitude = -90; latitude <= 90; latitude += 4) {
+    points.push(latLonToSphere(latitude, longitude, 1.018));
+  }
+  return points;
+}
 
 function VisualObjectLayer({
   objects,
@@ -144,52 +306,9 @@ function VisualObjectLayer({
   onHover: (id: string | null) => void;
   onSelect: (object: PropagatedOrbitObject) => void;
 }) {
-  const iconObjects = useMemo(() => selectIconObjects(objects, selectedId, hoveredId), [objects, selectedId, hoveredId]);
-  const groups = useMemo(() => groupVisualObjects(iconObjects), [iconObjects]);
-
   return (
     <group>
       <ObjectPointCloud objects={objects} selectedId={selectedId} hoveredId={hoveredId} onHover={onHover} onSelect={onSelect} />
-      <IconBillboardInstances
-        objects={groups.payload}
-        kind="payload"
-        selectedId={selectedId}
-        hoveredId={hoveredId}
-        onHover={onHover}
-        onSelect={onSelect}
-      />
-      <IconBillboardInstances
-        objects={groups.station}
-        kind="station"
-        selectedId={selectedId}
-        hoveredId={hoveredId}
-        onHover={onHover}
-        onSelect={onSelect}
-      />
-      <IconBillboardInstances
-        objects={groups.rocket_body}
-        kind="rocket_body"
-        selectedId={selectedId}
-        hoveredId={hoveredId}
-        onHover={onHover}
-        onSelect={onSelect}
-      />
-      <IconBillboardInstances
-        objects={groups.debris}
-        kind="debris"
-        selectedId={selectedId}
-        hoveredId={hoveredId}
-        onHover={onHover}
-        onSelect={onSelect}
-      />
-      <IconBillboardInstances
-        objects={groups.unknown}
-        kind="unknown"
-        selectedId={selectedId}
-        hoveredId={hoveredId}
-        onHover={onHover}
-        onSelect={onSelect}
-      />
     </group>
   );
 }
@@ -228,7 +347,7 @@ function ObjectPointCloud({
     return buffer;
   }, [objects, selectedId, hoveredId]);
   const material = useMemo(
-    () => new THREE.PointsMaterial({ size: 0.022, sizeAttenuation: true, vertexColors: true, transparent: true, opacity: 0.78, depthWrite: false }),
+    () => new THREE.PointsMaterial({ size: 0.018, sizeAttenuation: true, vertexColors: true, transparent: true, opacity: 0.86, depthWrite: false }),
     []
   );
 
@@ -487,7 +606,7 @@ function SelectedOrbit({
   return (
     <>
       <Line points={trail} color="#78c6ff" lineWidth={2.2} transparent opacity={0.88} />
-      <SelectedObjectModel object={object} tone="selected" />
+      <SelectedPointHighlight object={object} tone="selected" />
       {prediction ? (
         <>
           <Line
@@ -497,16 +616,15 @@ function SelectedOrbit({
             transparent
             opacity={0.75}
           />
-          <SelectedObjectModel object={prediction} tone="prediction" />
+          <SelectedPointHighlight object={prediction} tone="prediction" />
         </>
       ) : null}
     </>
   );
 }
 
-function SelectedObjectModel({ object, tone }: { object: PropagatedOrbitObject; tone: "selected" | "prediction" }) {
-  const kind = visualKindForObject(object);
-  const texture = useMemo(() => createObjectIconTexture(kind, tone), [kind, tone]);
+function SelectedPointHighlight({ object, tone }: { object: PropagatedOrbitObject; tone: "selected" | "prediction" }) {
+  const texture = useMemo(() => createPointHighlightTexture(tone), [tone]);
   const material = useMemo(
     () =>
       new THREE.SpriteMaterial({
@@ -529,11 +647,45 @@ function SelectedObjectModel({ object, tone }: { object: PropagatedOrbitObject; 
   return (
     <sprite
       position={object.scenePosition}
-      scale={tone === "prediction" ? [0.15, 0.15, 1] : [0.19, 0.19, 1]}
+      scale={tone === "prediction" ? [0.12, 0.12, 1] : [0.15, 0.15, 1]}
       material={material}
       renderOrder={6}
     />
   );
+}
+
+function createPointHighlightTexture(tone: "selected" | "prediction") {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Canvas 2D context is unavailable.");
+
+  const color = tone === "prediction" ? "#8affc1" : "#78c6ff";
+  context.clearRect(0, 0, 128, 128);
+  context.save();
+  context.shadowColor = rgba(color, 0.95);
+  context.shadowBlur = 18;
+  context.fillStyle = rgba(color, 0.96);
+  context.beginPath();
+  context.arc(64, 64, 14, 0, Math.PI * 2);
+  context.fill();
+  context.strokeStyle = rgba(color, 0.82);
+  context.lineWidth = 5;
+  context.beginPath();
+  context.arc(64, 64, 35, 0, Math.PI * 2);
+  context.stroke();
+  context.strokeStyle = rgba("#ffffff", 0.52);
+  context.lineWidth = 2;
+  context.beginPath();
+  context.arc(64, 64, 48, 0, Math.PI * 2);
+  context.stroke();
+  context.restore();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
 }
 
 function SelectionHalo({ tone }: { tone: "selected" | "prediction" }) {

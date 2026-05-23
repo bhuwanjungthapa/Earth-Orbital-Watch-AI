@@ -6,6 +6,8 @@ export type Vector3Tuple = [number, number, number];
 
 export type PredictionMode = "time" | "location";
 
+export type EarthMapStyle = "realistic" | "terrain" | "default";
+
 export interface OrbitObject {
   id: string;
   noradId: string;
@@ -86,6 +88,15 @@ export interface ObjectProfile {
   satcat: Record<string, unknown> | null;
   gp: Record<string, unknown> | null;
   errors: string[];
+}
+
+export interface ObjectImageResult {
+  title: string | null;
+  pageUrl: string | null;
+  imageUrl: string | null;
+  extract: string | null;
+  source: "wikipedia" | "google" | "none";
+  error?: string;
 }
 
 export interface LocationTarget {

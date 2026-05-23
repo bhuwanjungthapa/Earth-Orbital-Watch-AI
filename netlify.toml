@@ -13,6 +13,11 @@
   to = "/.netlify/functions/object-profile"
   status = 200
 
+[[redirects]]
+  from = "/api/object-image"
+  to = "/.netlify/functions/object-image"
+  status = 200
+
 [[headers]]
   for = "/assets/*"
   [headers.values]

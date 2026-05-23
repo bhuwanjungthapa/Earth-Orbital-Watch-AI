@@ -6,13 +6,14 @@ Repository: [bhuwanjungthapa/Earth-Orbital-Watch-AI](https://github.com/bhuwanju
 
 ## Features
 
-- 3D Earth with draggable orbit controls, realistic day/specular/normal/cloud textures, atmosphere, and galaxy background
+- 3D Earth with draggable orbit controls, switchable 4K/terrain/default map styling, cloud toggle, latitude/longitude grid, atmosphere, and optional galaxy background
 - Live propagated satellite/debris positions from current TLE data
-- Instanced 3D object markers for satellites, stations, rocket bodies, debris, and unknown catalog objects
+- Color-coded orbital dots for satellites, stations, rocket bodies, debris, and unknown catalog objects
 - CelesTrak-backed Netlify Function for broad public orbital catalog groups
 - Optional Space-Track provider for the full public on-orbit catalog when credentials are configured
 - Click any object to inspect altitude, velocity, inclination, eccentricity, apogee, perigee, latitude, longitude, and catalog identity
 - SATCAT profile lookup for owner, launch date, launch site, and radar cross section
+- Selected-object image lookup from Wikipedia/Wikimedia, with optional Google Programmable Search fallback
 - Natural-language filtering such as `Russian rocket bodies before 2000` or `high risk debris below 600 km`
 - Orbit classification into LEO, MEO, GEO, HEO, Deep, or Unknown
 - Local anomaly scoring using perigee, eccentricity, drag proxy, stale element age, object type, and propagated altitude
@@ -60,6 +61,15 @@ SPACE_TRACK_PASSWORD=your-password
 ```
 
 Then choose `Space-Track` in the app provider menu. Credentials stay server-side inside Netlify Functions.
+
+## Optional Google Image Fallback
+
+The app uses Wikimedia image lookup for free by default. To fall back to Google image search when Wikimedia has no result, configure Google Programmable Search in Netlify:
+
+```bash
+GOOGLE_SEARCH_API_KEY=your-api-key
+GOOGLE_SEARCH_CX=your-search-engine-id
+```
 
 ## Local Development
 

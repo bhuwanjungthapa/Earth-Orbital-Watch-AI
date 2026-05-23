@@ -2,13 +2,13 @@ import { mergeCatalogs, parseTleCatalog, pickGroups } from "./_shared/orbit-util
 
 const cache = new Map();
 const ttlMs = 1000 * 60 * 60 * 2;
-const catalogVersion = "2026-05-23-b";
+const catalogVersion = "2026-05-23-c";
 
 export async function handler(event) {
   const query = event.queryStringParameters ?? {};
   const provider = query.provider === "spacetrack" ? "spacetrack" : "celestrak";
   const preset = query.preset ?? "wide";
-  const limit = clampNumber(Number(query.limit), 500, 60000, 18000);
+  const limit = clampNumber(Number(query.limit), 500, 18000, 12000);
   const cacheKey = `${catalogVersion}:${provider}:${preset}:${limit}`;
   const cached = cache.get(cacheKey);
 
@@ -31,11 +31,14 @@ export async function handler(event) {
     return json(
       {
         provider,
+        preset,
+        groups: [],
         fetchedAt: new Date().toISOString(),
+        objectCount: 0,
         objects: [],
         errors: [error instanceof Error ? error.message : "Unknown catalog fetch error"]
       },
-      provider === "spacetrack" ? 400 : 502,
+      provider === "spacetrack" ? 400 : 200,
       "ERROR"
     );
   }
