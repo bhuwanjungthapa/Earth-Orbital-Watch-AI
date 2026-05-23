@@ -213,7 +213,15 @@ function inferObjectType(name, group) {
     return "rocket_body";
   }
 
-  if (group === "active" || group === "stations" || value.includes("starlink") || value.includes("oneweb")) {
+  if (
+    group === "active" ||
+    group === "stations" ||
+    group === "featured" ||
+    value.includes("hst") ||
+    value.includes("hubble") ||
+    value.includes("starlink") ||
+    value.includes("oneweb")
+  ) {
     return "payload";
   }
 

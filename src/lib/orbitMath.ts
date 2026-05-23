@@ -171,6 +171,9 @@ function normalizeObjectType(object: OrbitObject) {
   if (
     value.includes("stations") ||
     value.includes("active") ||
+    value.includes("featured") ||
+    value.includes("hst") ||
+    value.includes("hubble") ||
     value.includes("starlink") ||
     value.includes("oneweb") ||
     value.includes("payload") ||

@@ -692,16 +692,19 @@ function matchesCatalogSearch(object: PropagatedOrbitObject, query: string) {
     object.objectType,
     object.orbitClass
   ].join(" "));
-  const terms = expandedSearchTerms(normalizedQuery);
+  const termGroups = expandedSearchTermGroups(normalizedQuery);
 
-  return terms.every((term) => haystack.includes(term));
+  return termGroups.every((terms) => terms.some((term) => haystack.includes(term)));
 }
 
-function expandedSearchTerms(query: string) {
+function expandedSearchTermGroups(query: string) {
   const aliases: Record<string, string[]> = {
-    hubble: ["hubble"],
-    hst: ["hubble"],
+    hubble: ["hubble", "hst", "20580"],
+    hst: ["hst", "hubble", "20580"],
     iss: ["iss"],
+    webb: ["webb", "jwst", "james"],
+    james: ["james", "webb", "jwst"],
+    jwst: ["jwst", "webb", "james"],
     geo: ["geo"],
     geostationary: ["geo"],
     geosynchronous: ["geo"],
@@ -717,7 +720,7 @@ function expandedSearchTerms(query: string) {
   return query
     .split(" ")
     .filter(Boolean)
-    .flatMap((term) => aliases[term] ?? [term]);
+    .map((term) => aliases[term] ?? [term]);
 }
 
 function normalizeCatalogText(value: string) {

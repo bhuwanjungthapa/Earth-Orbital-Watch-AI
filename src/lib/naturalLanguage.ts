@@ -37,9 +37,10 @@ export function parseNaturalLanguageIntent(input: string): NaturalLanguageIntent
   if (/\b(heo|molniya|highly elliptical|elliptical)\b/.test(value)) orbitClasses.add("HEO");
   if (/\bdeep\b/.test(value)) orbitClasses.add("Deep");
 
-  for (const token of ["starlink", "oneweb", "cosmos", "kosmos", "fengyun", "iridium", "goes", "noaa", "gps", "navstar", "galileo", "beidou", "landsat", "sentinel", "hubble", "skynet"]) {
+  for (const token of ["starlink", "oneweb", "cosmos", "kosmos", "fengyun", "iridium", "goes", "noaa", "gps", "navstar", "galileo", "beidou", "landsat", "sentinel", "hubble", "hst", "skynet"]) {
     if (value.includes(token)) textTokens.add(token);
   }
+  if (value.includes("hubble")) textTokens.add("hst");
 
   addCountryTokens(value, textTokens, requiredTokens);
   addFreeTextTokens(value, requiredTokens);

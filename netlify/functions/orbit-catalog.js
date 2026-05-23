@@ -2,7 +2,7 @@ import { mergeCatalogs, parseTleCatalog, pickGroups } from "./_shared/orbit-util
 
 const cache = new Map();
 const ttlMs = 1000 * 60 * 60 * 2;
-const catalogVersion = "2026-05-23-d";
+const catalogVersion = "2026-05-23-e";
 const maxResponseBytes = 5_200_000;
 const functionDeadlineMs = 8_200;
 const celestrakTimeoutMs = 4_200;
@@ -90,6 +90,7 @@ export async function handler(event) {
 async function fetchCelestrakCatalog(preset, limit) {
   const groups = pickGroups(preset);
   const settled = await fetchGroupsWithLimit(groups, 5);
+  const featured = await fetchFeaturedObjects();
 
   const catalogs = [];
   const errors = [];
@@ -101,6 +102,8 @@ async function fetchCelestrakCatalog(preset, limit) {
       errors.push(result.reason instanceof Error ? result.reason.message : String(result.reason));
     }
   }
+  if (featured.objects.length) catalogs.push(featured.objects);
+  errors.push(...featured.errors);
 
   const objects = mergeCatalogs(catalogs, limit);
   if (!objects.length) {
@@ -110,7 +113,7 @@ async function fetchCelestrakCatalog(preset, limit) {
   return {
     provider: "CelesTrak",
     preset,
-    groups,
+    groups: featured.objects.length ? Array.from(new Set([...groups, "featured"])) : groups,
     fetchedAt: new Date().toISOString(),
     objectCount: objects.length,
     objects,
@@ -191,6 +194,42 @@ async function fetchCelestrakGroup(group, deadlineAt) {
   }
 
   throw lastError;
+}
+
+async function fetchFeaturedObjects() {
+  const featured = [
+    { label: "HST", path: "CATNR=20580", group: "featured" }
+  ];
+  const objects = [];
+  const errors = [];
+
+  for (const item of featured) {
+    try {
+      const url = `https://celestrak.org/NORAD/elements/gp.php?${item.path}&FORMAT=tle`;
+      const response = await fetchWithTimeout(url, {
+        headers: {
+          "user-agent": "Earth-Orbital-Watch-AI/0.1"
+        }
+      }, 1800);
+
+      if (!response.ok) {
+        throw new Error(`${item.label}: ${response.status}`);
+      }
+
+      const text = await response.text();
+      const parsed = parseTleCatalog(text, item.group, "CelesTrak").map((object) => ({
+        ...object,
+        name: object.noradId === "20580" ? "HST (Hubble Space Telescope)" : object.name,
+        objectType: "payload",
+        isActive: true
+      }));
+      objects.push(...parsed);
+    } catch (error) {
+      errors.push(error instanceof Error ? `${item.label}: ${error.message}` : `${item.label}: featured lookup failed`);
+    }
+  }
+
+  return { objects, errors };
 }
 
 async function fetchWithTimeout(url, options, timeoutMs) {
