@@ -5,6 +5,27 @@ import * as THREE from "three";
 import { createOrbitTrail } from "../lib/orbitMath";
 import type { EarthMapStyle, LocationTarget, PredictionMode, PropagatedOrbitObject, Vector3Tuple } from "../types";
 
+type CountryLine = {
+  points: Vector3Tuple[];
+  major: boolean;
+};
+
+interface CountryGeoJson {
+  type: "FeatureCollection";
+  features: Array<{
+    geometry:
+      | {
+          type: "Polygon";
+          coordinates: number[][][];
+        }
+      | {
+          type: "MultiPolygon";
+          coordinates: number[][][][];
+        }
+      | null;
+  }>;
+}
+
 interface OrbitalSceneProps {
   objects: PropagatedOrbitObject[];
   selected: PropagatedOrbitObject | null;
@@ -126,6 +147,7 @@ const Earth = memo(function Earth({
   });
 
   const materialStyle = earthMaterialStyle(mapStyle);
+  const showCountryBorders = mapStyle !== "realistic";
 
   return (
     <group ref={groupRef}>
@@ -156,7 +178,8 @@ const Earth = memo(function Earth({
         <sphereGeometry args={[1, 128, 96]} />
         <meshBasicMaterial color="#4f9cff" transparent opacity={0.035} side={THREE.BackSide} />
       </mesh>
-      {showGrid ? <LatitudeLongitudeGrid /> : null}
+      {showCountryBorders ? <CountryBorders mapStyle={mapStyle} /> : null}
+      {showGrid ? <LatitudeLongitudeGrid mapStyle={mapStyle} /> : null}
       {passLocation ? <GroundMarker location={passLocation} /> : null}
     </group>
   );
@@ -166,18 +189,18 @@ function earthMaterialStyle(mapStyle: EarthMapStyle) {
   if (mapStyle === "terrain") {
     return {
       color: new THREE.Color("#ffffff"),
-      normalScale: new THREE.Vector2(0.72, 0.72),
-      specular: new THREE.Color("#132118"),
-      shininess: 4
+      normalScale: new THREE.Vector2(0.86, 0.86),
+      specular: new THREE.Color("#0c1715"),
+      shininess: 3
     };
   }
 
   if (mapStyle === "default") {
     return {
       color: new THREE.Color("#ffffff"),
-      normalScale: new THREE.Vector2(0.12, 0.12),
-      specular: new THREE.Color("#1b3552"),
-      shininess: 7
+      normalScale: new THREE.Vector2(0.04, 0.04),
+      specular: new THREE.Color("#16324e"),
+      shininess: 9
     };
   }
 
@@ -215,31 +238,58 @@ function createStyledEarthTexture(source: THREE.Texture, style: "terrain" | "def
   const data = frame.data;
 
   for (let index = 0; index < data.length; index += 4) {
+    const pixel = index / 4;
+    const x = pixel % width;
+    const y = Math.floor(pixel / width);
     const red = data[index];
     const green = data[index + 1];
     const blue = data[index + 2];
     const light = red * 0.299 + green * 0.587 + blue * 0.114;
-    const water = blue > red * 1.12 && blue > green * 1.04;
+    const water = blue > red * 1.08 && blue > green * 1.02;
+    const ice = light > 190 && Math.abs(red - green) < 30 && Math.abs(red - blue) < 38;
+    const vegetation = Math.max(0, green - Math.max(red, blue) * 0.7);
+    const elevation = clamp01((light - 76) / 164);
+    const dry = clamp01((red - green + 42) / 98);
+    const noise = fract(Math.sin(x * 12.9898 + y * 78.233) * 43758.5453);
 
     if (style === "terrain") {
       if (water) {
-        data[index] = Math.round(14 + light * 0.12);
-        data[index + 1] = Math.round(48 + light * 0.2);
-        data[index + 2] = Math.round(78 + light * 0.34);
+        const depth = clamp01((blue - Math.max(red, green) + 34) / 120);
+        const shade = noise * 8 + light * 0.05;
+        data[index] = channel(18 + shade * 0.55);
+        data[index + 1] = channel(74 + shade * 0.82 - depth * 12);
+        data[index + 2] = channel(116 + shade * 1.06 - depth * 16);
+      } else if (ice) {
+        const shade = 224 + light * 0.08 + noise * 12;
+        data[index] = channel(shade);
+        data[index + 1] = channel(shade + 4);
+        data[index + 2] = channel(shade + 5);
       } else {
-        const high = light > 142;
-        data[index] = Math.round((high ? 188 : 94) + light * 0.28);
-        data[index + 1] = Math.round((high ? 172 : 112) + light * 0.22);
-        data[index + 2] = Math.round((high ? 124 : 70) + light * 0.14);
+        const lowLand = mixRgb([76, 132, 77], [177, 154, 88], dry);
+        const highLand = mixRgb([161, 154, 115], [229, 218, 184], elevation);
+        const base = mixRgb(lowLand, highLand, clamp01(elevation * 0.72 + dry * 0.18));
+        const relief = (elevation - 0.46) * 42 + vegetation * 0.18 + (noise - 0.5) * 18;
+        data[index] = channel(base[0] + relief);
+        data[index + 1] = channel(base[1] + relief * 0.72);
+        data[index + 2] = channel(base[2] + relief * 0.48);
       }
     } else if (water) {
-      data[index] = Math.round(21 + light * 0.1);
-      data[index + 1] = Math.round(84 + light * 0.15);
-      data[index + 2] = Math.round(132 + light * 0.22);
+      const coast = clamp01((green - red + 18) / 72);
+      data[index] = channel(137 + light * 0.08 + coast * 16);
+      data[index + 1] = channel(190 + light * 0.08 + coast * 12);
+      data[index + 2] = channel(220 + light * 0.06);
+    } else if (ice) {
+      data[index] = 239;
+      data[index + 1] = 244;
+      data[index + 2] = 246;
     } else {
-      data[index] = Math.round(112 + light * 0.32);
-      data[index + 1] = Math.round(150 + light * 0.28);
-      data[index + 2] = Math.round(92 + light * 0.12);
+      const atlasGreen = mixRgb([170, 210, 125], [116, 178, 98], clamp01(vegetation / 96));
+      const atlasDry = mixRgb([232, 213, 149], [211, 181, 112], dry);
+      const base = mixRgb(atlasGreen, atlasDry, clamp01(dry * 0.76 + elevation * 0.12));
+      const shade = (light - 128) * 0.08;
+      data[index] = channel(base[0] + shade);
+      data[index + 1] = channel(base[1] + shade);
+      data[index + 2] = channel(base[2] + shade);
     }
   }
 
@@ -254,24 +304,109 @@ function createStyledEarthTexture(source: THREE.Texture, style: "terrain" | "def
   return texture;
 }
 
-function LatitudeLongitudeGrid() {
+function CountryBorders({ mapStyle }: { mapStyle: EarthMapStyle }) {
+  const [lines, setLines] = useState<CountryLine[]>([]);
+
+  useEffect(() => {
+    let active = true;
+
+    fetch("/geo/ne_110m_admin_0_countries.geojson")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: CountryGeoJson | null) => {
+        if (active && data) setLines(extractCountryLines(data, 1.024));
+      })
+      .catch(() => {
+        if (active) setLines([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const color = mapStyle === "terrain" ? "#f8fafc" : "#185a7d";
+  const opacity = mapStyle === "terrain" ? 0.48 : 0.56;
+  const majorOpacity = mapStyle === "terrain" ? 0.68 : 0.76;
+
+  return (
+    <group>
+      {lines.map((line, index) => (
+        <Line
+          key={index}
+          points={line.points}
+          color={color}
+          lineWidth={line.major ? 0.95 : 0.65}
+          transparent
+          opacity={line.major ? majorOpacity : opacity}
+        />
+      ))}
+    </group>
+  );
+}
+
+function extractCountryLines(data: CountryGeoJson, radius: number) {
+  const lines: CountryLine[] = [];
+
+  for (const feature of data.features) {
+    const geometry = feature.geometry;
+    if (!geometry) continue;
+
+    const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+    for (const polygon of polygons) {
+      for (let ringIndex = 0; ringIndex < polygon.length; ringIndex += 1) {
+        const ring = polygon[ringIndex];
+        if (ring.length < 2) continue;
+
+        const step = ring.length > 360 ? 4 : ring.length > 180 ? 3 : ring.length > 90 ? 2 : 1;
+        const points: Vector3Tuple[] = [];
+        for (let index = 0; index < ring.length; index += step) {
+          const [longitude, latitude] = ring[index];
+          if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+            points.push(latLonToSphere(latitude, longitude, radius));
+          }
+        }
+
+        if (points.length > 1) {
+          const first = points[0];
+          const last = points[points.length - 1];
+          if (distanceSquared(first, last) > 0.00001) points.push(first);
+          lines.push({ points, major: ringIndex === 0 });
+        }
+      }
+    }
+  }
+
+  return lines;
+}
+
+function LatitudeLongitudeGrid({ mapStyle }: { mapStyle: EarthMapStyle }) {
   const lines = useMemo(() => {
-    const items: Vector3Tuple[][] = [];
-    for (let latitude = -60; latitude <= 60; latitude += 30) {
-      items.push(createLatitudeLine(latitude));
+    const items: CountryLine[] = [];
+    for (let latitude = -75; latitude <= 75; latitude += 15) {
+      items.push({ points: createLatitudeLine(latitude), major: latitude === 0 || latitude % 45 === 0 });
     }
 
-    for (let longitude = -180; longitude < 180; longitude += 30) {
-      items.push(createLongitudeLine(longitude));
+    for (let longitude = -180; longitude < 180; longitude += 15) {
+      items.push({ points: createLongitudeLine(longitude), major: longitude === 0 || Math.abs(longitude) === 90 || Math.abs(longitude) === 180 });
     }
 
     return items;
   }, []);
+  const color = mapStyle === "default" ? "#0d5f86" : "#d8f3ff";
+  const opacity = mapStyle === "default" ? 0.34 : 0.28;
+  const majorOpacity = mapStyle === "default" ? 0.52 : 0.45;
 
   return (
     <group>
-      {lines.map((points, index) => (
-        <Line key={index} points={points} color="#d8f3ff" lineWidth={0.7} transparent opacity={0.26} />
+      {lines.map((line, index) => (
+        <Line
+          key={index}
+          points={line.points}
+          color={line.major ? "#ffffff" : color}
+          lineWidth={line.major ? 0.9 : 0.55}
+          transparent
+          opacity={line.major ? majorOpacity : opacity}
+        />
       ))}
     </group>
   );
@@ -279,18 +414,46 @@ function LatitudeLongitudeGrid() {
 
 function createLatitudeLine(latitude: number) {
   const points: Vector3Tuple[] = [];
-  for (let longitude = -180; longitude <= 180; longitude += 4) {
-    points.push(latLonToSphere(latitude, longitude, 1.018));
+  for (let longitude = -180; longitude <= 180; longitude += 3) {
+    points.push(latLonToSphere(latitude, longitude, 1.029));
   }
   return points;
 }
 
 function createLongitudeLine(longitude: number) {
   const points: Vector3Tuple[] = [];
-  for (let latitude = -90; latitude <= 90; latitude += 4) {
-    points.push(latLonToSphere(latitude, longitude, 1.018));
+  for (let latitude = -90; latitude <= 90; latitude += 3) {
+    points.push(latLonToSphere(latitude, longitude, 1.029));
   }
   return points;
+}
+
+function channel(value: number) {
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function clamp01(value: number) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function fract(value: number) {
+  return value - Math.floor(value);
+}
+
+function mixRgb(start: [number, number, number], end: [number, number, number], amount: number): [number, number, number] {
+  const ratio = clamp01(amount);
+  return [
+    start[0] + (end[0] - start[0]) * ratio,
+    start[1] + (end[1] - start[1]) * ratio,
+    start[2] + (end[2] - start[2]) * ratio
+  ];
+}
+
+function distanceSquared(first: Vector3Tuple, second: Vector3Tuple) {
+  const x = first[0] - second[0];
+  const y = first[1] - second[1];
+  const z = first[2] - second[2];
+  return x * x + y * y + z * z;
 }
 
 function VisualObjectLayer({

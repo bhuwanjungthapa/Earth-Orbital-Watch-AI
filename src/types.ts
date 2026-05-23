@@ -95,7 +95,7 @@ export interface ObjectImageResult {
   pageUrl: string | null;
   imageUrl: string | null;
   extract: string | null;
-  source: "wikipedia" | "google" | "none";
+  source: "wikipedia" | "wikimedia" | "wikidata" | "google" | "nasa" | "none";
   error?: string;
 }
 

@@ -6,14 +6,14 @@ Repository: [bhuwanjungthapa/Earth-Orbital-Watch-AI](https://github.com/bhuwanju
 
 ## Features
 
-- 3D Earth with draggable orbit controls, switchable 4K/terrain/default map styling, cloud toggle, latitude/longitude grid, atmosphere, and optional galaxy background
+- 3D Earth with draggable orbit controls, switchable 4K/terrain/default map styling, country boundaries, cloud toggle, dense latitude/longitude grid, atmosphere, and optional galaxy background
 - Live propagated satellite/debris positions from current TLE data
 - Color-coded orbital dots for satellites, stations, rocket bodies, debris, and unknown catalog objects
 - CelesTrak-backed Netlify Function for broad public orbital catalog groups
 - Optional Space-Track provider for the full public on-orbit catalog when credentials are configured
 - Click any object to inspect altitude, velocity, inclination, eccentricity, apogee, perigee, latitude, longitude, and catalog identity
 - SATCAT profile lookup for owner, launch date, launch site, and radar cross section
-- Selected-object image lookup from Wikipedia/Wikimedia, with optional Google Programmable Search fallback
+- Selected-object image lookup from Wikipedia, Wikimedia Commons, Wikidata, NASA Images, with optional Google Programmable Search fallback
 - Natural-language filtering such as `Russian rocket bodies before 2000` or `high risk debris below 600 km`
 - Orbit classification into LEO, MEO, GEO, HEO, Deep, or Unknown
 - Local anomaly scoring using perigee, eccentricity, drag proxy, stale element age, object type, and propagated altitude
@@ -51,6 +51,10 @@ The object detail panel uses CelesTrak SATCAT records:
 
 The app describes positions as propagated from public orbital elements. It is not a live sensor-tracking or operational conjunction-assessment system.
 
+Country boundary overlays use the public Natural Earth Admin 0 countries dataset stored as a static asset:
+
+- `/geo/ne_110m_admin_0_countries.geojson`
+
 ## Optional Space-Track Setup
 
 Create a free Space-Track account and configure these environment variables in Netlify:
@@ -62,9 +66,13 @@ SPACE_TRACK_PASSWORD=your-password
 
 Then choose `Space-Track` in the app provider menu. Credentials stay server-side inside Netlify Functions.
 
+## Object Image Lookup
+
+The detail panel searches free public sources first: Wikipedia, Wikimedia Commons, Wikidata image claims, and NASA Images. If no public source returns a usable image, the UI provides a Google Images search link for the selected object.
+
 ## Optional Google Image Fallback
 
-The app uses Wikimedia image lookup for free by default. To fall back to Google image search when Wikimedia has no result, configure Google Programmable Search in Netlify:
+To fetch Google image results directly inside the app, configure Google Programmable Search in Netlify:
 
 ```bash
 GOOGLE_SEARCH_API_KEY=your-api-key

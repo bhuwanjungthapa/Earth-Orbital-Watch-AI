@@ -569,7 +569,7 @@ button {
   font-size: 0.95rem;
 }
 
-.object-image-panel a,
+.object-image-panel > a,
 .image-placeholder {
   display: grid;
   gap: 8px;
@@ -605,6 +605,16 @@ button {
   font-size: 0.8rem;
   font-weight: 800;
   text-align: center;
+}
+
+.image-placeholder a {
+  min-height: 0;
+  padding: 7px 10px;
+  border: 1px solid rgba(138, 255, 193, 0.28);
+  border-radius: 6px;
+  background: rgba(138, 255, 193, 0.08);
+  color: var(--green);
+  text-decoration: none;
 }
 
 .prediction-heading {

@@ -29,7 +29,7 @@ import { buildObjectBrief, getProfileValue, riskLabel } from "./lib/insights";
 import { applyNaturalLanguageIntent, parseNaturalLanguageIntent } from "./lib/naturalLanguage";
 import { isLocationPassQuery, parseLocationQuery, predictPassForLocation } from "./lib/passPrediction";
 import { findNearestObjects, formatDecimal, formatKm, labelForOrbitClass, propagateObject } from "./lib/orbitMath";
-import type { EarthMapStyle, ObjectType, OrbitClass, PassPrediction, PredictionMode, PropagatedOrbitObject } from "./types";
+import type { EarthMapStyle, ObjectImageResult, ObjectType, OrbitClass, PassPrediction, PredictionMode, PropagatedOrbitObject } from "./types";
 
 const objectOptions: Array<"all" | ObjectType> = ["all", "payload", "debris", "rocket_body", "unknown"];
 const orbitOptions: Array<"all" | OrbitClass> = ["all", "LEO", "MEO", "GEO", "HEO", "Deep", "Unknown"];
@@ -316,10 +316,10 @@ export default function App() {
                 icon={<Layers3 size={18} />}
                 title="Earth Map"
                 compact
-                help="Scene display controls. Map styles use bundled textures and styling so the project stays deployable without paid map keys."
+                help="Scene display controls. Terrain and default map styles add country boundaries without requiring paid map keys."
               />
               <label className="field">
-                <FieldLabel label="Map style" help="4K imagery uses the current Earth texture. Terrain increases relief and land contrast. Default is a cleaner atlas-style render." />
+                <FieldLabel label="Map style" help="4K imagery uses the current Earth texture. Terrain adds shaded relief and country outlines. Default is a cleaner atlas-style render with country outlines." />
                 <select value={mapStyle} onChange={(event) => setMapStyle(event.target.value as EarthMapStyle)} aria-label="Earth map style">
                   <option value="realistic">Current 4K</option>
                   <option value="terrain">Terrain</option>
@@ -346,7 +346,7 @@ export default function App() {
                   active={showGrid}
                   icon={<LocateFixed size={16} />}
                   label="Lat/Lon"
-                  help="Toggle latitude and longitude reference lines on Earth."
+                  help="Toggle dense 15-degree latitude and longitude reference lines on Earth."
                   onClick={() => setShowGrid((value) => !value)}
                 />
               </div>
@@ -396,14 +396,17 @@ export default function App() {
             <section className="object-image-panel">
               <h3>Reference Image</h3>
               {imageLoading ? (
-                <div className="image-placeholder">Searching Wikimedia</div>
+                <div className="image-placeholder">Searching public image sources</div>
               ) : objectImage?.imageUrl ? (
                 <a href={objectImage.pageUrl ?? objectImage.imageUrl} target="_blank" rel="noreferrer">
                   <img src={objectImage.imageUrl} alt={objectImage.title ?? selected.name} />
-                  <span>{objectImage.title ?? selected.name}</span>
+                  <span>{objectImage.title ?? selected.name} · {sourceLabel(objectImage.source)}</span>
                 </a>
               ) : (
-                <div className="image-placeholder">No verified public image found</div>
+                <div className="image-placeholder">
+                  <span>No public image source found</span>
+                  <a href={googleImageSearchUrl(selected)} target="_blank" rel="noreferrer">Search Google Images</a>
+                </div>
               )}
             </section>
 
@@ -679,4 +682,22 @@ function formatDateTime(value: string) {
     hour: "numeric",
     minute: "2-digit"
   });
+}
+
+function sourceLabel(source: ObjectImageResult["source"]) {
+  const labels: Record<ObjectImageResult["source"], string> = {
+    wikipedia: "Wikipedia",
+    wikimedia: "Wikimedia Commons",
+    wikidata: "Wikidata",
+    google: "Google Images",
+    nasa: "NASA Images",
+    none: "Public source"
+  };
+
+  return labels[source];
+}
+
+function googleImageSearchUrl(object: PropagatedOrbitObject) {
+  const type = object.objectType === "rocket_body" ? "rocket body" : object.objectType === "debris" ? "space debris" : "satellite";
+  return `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${object.name} ${type}`)}`;
 }
