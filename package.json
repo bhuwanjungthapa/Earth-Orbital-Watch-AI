@@ -1,0 +1,34 @@
+{
+  "name": "earth-orbital-watch-ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A serverless 3D orbital intelligence dashboard for tracked Earth-orbiting objects.",
+  "author": "Bhuwan Jung Thapa",
+  "license": "MIT",
+  "scripts": {
+    "dev": "netlify dev --command \"vite --host 0.0.0.0\"",
+    "vite:dev": "vite --host 0.0.0.0",
+    "netlify:dev": "netlify dev --command \"vite --host 0.0.0.0\"",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.17.10",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "satellite.js": "^6.0.0",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/three": "^0.170.0",
+    "@vitejs/plugin-react": "^4.3.3",
+    "netlify-cli": "^17.38.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}
