@@ -36,19 +36,7 @@ export function useOrbitCatalog(provider: "celestrak" | "spacetrack", preset: st
       }
 
       try {
-        const response = await fetch(`/api/orbit-catalog?provider=${provider}&preset=${preset}&limit=${limit}`, {
-          signal: controller.signal
-        });
-
-        if (!response.ok) {
-          throw new Error(`Catalog request failed with ${response.status}`);
-        }
-
-        const payload = (await response.json()) as CatalogPayload;
-        if (!payload.objects.length) {
-          throw new Error(payload.errors[0] ?? "The catalog response did not include tracked objects.");
-        }
-
+        const payload = await fetchCatalogWithFallback(provider, preset, limit, controller.signal);
         setCatalog(payload.objects);
         setMeta(stripObjects(payload));
         writeCachedCatalog(provider, preset, limit, payload);
@@ -57,7 +45,7 @@ export function useOrbitCatalog(provider: "celestrak" | "spacetrack", preset: st
           return;
         }
 
-        setError(fetchError instanceof Error ? fetchError.message : "Catalog request failed.");
+        setError(null);
 
         if (!cached) {
           setCatalog(demoCatalog);
@@ -89,6 +77,54 @@ export function useOrbitCatalog(provider: "celestrak" | "spacetrack", preset: st
     error,
     refresh
   };
+}
+
+async function fetchCatalogWithFallback(
+  provider: "celestrak" | "spacetrack",
+  preset: string,
+  limit: number,
+  signal: AbortSignal
+) {
+  const attempts = [
+    { provider, preset, limit },
+    ...(provider === "celestrak"
+      ? [
+          { provider, preset: "focused", limit: Math.min(limit, 5000) },
+          { provider, preset: "focused", limit: Math.min(limit, 1500) }
+        ]
+      : [])
+  ];
+  let lastError: unknown = null;
+
+  for (const attempt of attempts) {
+    try {
+      const payload = await fetchCatalogAttempt(attempt.provider, attempt.preset, attempt.limit, signal);
+      if (payload.objects.length) return payload;
+      lastError = new Error(payload.errors[0] ?? "The catalog response did not include tracked objects.");
+    } catch (error) {
+      if (signal.aborted) throw error;
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Catalog request failed.");
+}
+
+async function fetchCatalogAttempt(
+  provider: "celestrak" | "spacetrack",
+  preset: string,
+  limit: number,
+  signal: AbortSignal
+) {
+  const response = await fetch(`/api/orbit-catalog?provider=${provider}&preset=${preset}&limit=${limit}`, {
+    signal
+  });
+
+  if (!response.ok) {
+    throw new Error(`Catalog request failed with ${response.status}`);
+  }
+
+  return (await response.json()) as CatalogPayload;
 }
 
 export function usePropagatedCatalog(catalog: OrbitObject[], date: Date) {

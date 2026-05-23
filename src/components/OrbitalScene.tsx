@@ -765,6 +765,7 @@ function SelectedOrbit({
   predictionMode: PredictionMode;
 }) {
   const trail = useMemo(() => createOrbitTrail(object, date, 200), [object, date]);
+  const predictionColor = predictionMode === "location" ? "#ffd166" : "#ff4fd8";
 
   return (
     <>
@@ -774,10 +775,10 @@ function SelectedOrbit({
         <>
           <Line
             points={[object.scenePosition, prediction.scenePosition]}
-            color={predictionMode === "location" ? "#8affc1" : "#78c6ff"}
-            lineWidth={1.5}
+            color={predictionColor}
+            lineWidth={2.4}
             transparent
-            opacity={0.75}
+            opacity={0.92}
           />
           <SelectedPointHighlight object={prediction} tone="prediction" />
         </>
@@ -810,7 +811,7 @@ function SelectedPointHighlight({ object, tone }: { object: PropagatedOrbitObjec
   return (
     <sprite
       position={object.scenePosition}
-      scale={tone === "prediction" ? [0.12, 0.12, 1] : [0.15, 0.15, 1]}
+      scale={tone === "prediction" ? [0.18, 0.18, 1] : [0.15, 0.15, 1]}
       material={material}
       renderOrder={6}
     />
@@ -824,7 +825,7 @@ function createPointHighlightTexture(tone: "selected" | "prediction") {
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Canvas 2D context is unavailable.");
 
-  const color = tone === "prediction" ? "#8affc1" : "#78c6ff";
+  const color = tone === "prediction" ? "#ff4fd8" : "#78c6ff";
   context.clearRect(0, 0, 128, 128);
   context.save();
   context.shadowColor = rgba(color, 0.95);
@@ -852,8 +853,8 @@ function createPointHighlightTexture(tone: "selected" | "prediction") {
 }
 
 function SelectionHalo({ tone }: { tone: "selected" | "prediction" }) {
-  const color = tone === "prediction" ? "#8affc1" : "#78c6ff";
-  const opacity = tone === "prediction" ? 0.55 : 0.78;
+  const color = tone === "prediction" ? "#ff4fd8" : "#78c6ff";
+  const opacity = tone === "prediction" ? 0.72 : 0.78;
 
   return (
     <>
@@ -871,10 +872,10 @@ function SelectionHalo({ tone }: { tone: "selected" | "prediction" }) {
 
 function ObjectSilhouette({ kind, tone }: { kind: VisualKind; tone: "selected" | "prediction" }) {
   const preview = tone === "prediction";
-  const panelColor = preview ? "#6ee7c8" : "#2459b9";
-  const metalColor = preview ? "#b8fff0" : "#d6dde8";
-  const bodyColor = preview ? "#8affc1" : kind === "payload" ? "#92d8ff" : kind === "rocket_body" ? "#c89cff" : "#d6dde8";
-  const debrisColor = preview ? "#8affc1" : "#ff9f1c";
+  const panelColor = preview ? "#ffd166" : "#2459b9";
+  const metalColor = preview ? "#ffe6a6" : "#d6dde8";
+  const bodyColor = preview ? "#ff4fd8" : kind === "payload" ? "#92d8ff" : kind === "rocket_body" ? "#c89cff" : "#d6dde8";
+  const debrisColor = preview ? "#ff4fd8" : "#ff9f1c";
   const opacity = preview ? 0.72 : 1;
 
   if (kind === "station") {
@@ -971,11 +972,11 @@ function ObjectSilhouette({ kind, tone }: { kind: VisualKind; tone: "selected" |
     <group>
       <mesh rotation={[0.35, 0.6, 0.15]}>
         <octahedronGeometry args={[0.043, 0]} />
-        <meshStandardMaterial color={preview ? "#8affc1" : "#9ca3af"} metalness={0.58} roughness={0.36} transparent={preview} opacity={opacity} />
+        <meshStandardMaterial color={preview ? "#ff4fd8" : "#9ca3af"} metalness={0.58} roughness={0.36} transparent={preview} opacity={opacity} />
       </mesh>
       <mesh rotation={[Math.PI / 2, 0, 0]}>
         <torusGeometry args={[0.052, 0.0016, 8, 38]} />
-        <meshBasicMaterial color={preview ? "#8affc1" : "#cbd5e1"} transparent opacity={preview ? 0.48 : 0.62} />
+        <meshBasicMaterial color={preview ? "#ff4fd8" : "#cbd5e1"} transparent opacity={preview ? 0.48 : 0.62} />
       </mesh>
     </group>
   );
@@ -1259,7 +1260,7 @@ function roundedRect(context: CanvasRenderingContext2D, x: number, y: number, wi
 }
 
 function iconAccent(kind: VisualKind, tone: IconTone) {
-  if (tone === "prediction") return "#8affc1";
+  if (tone === "prediction") return "#ff4fd8";
   if (tone === "selected") return "#78c6ff";
   if (kind === "station") return "#f8fafc";
   if (kind === "payload") return "#78c6ff";
