@@ -106,22 +106,17 @@ export default function App() {
   const aiAsksLocationPass = useMemo(() => isLocationPassQuery(aiCommand), [aiCommand]);
 
   const filtered = useMemo(() => {
-    const byText = query.trim().toLowerCase();
+    const byText = query.trim();
+    const baseObjects = byText
+      ? propagated.filter((object) => matchesCatalogSearch(object, byText))
+      : propagated.filter((object) => {
+          if (objectType !== "all" && object.objectType !== objectType) return false;
+          if (orbitClass !== "all" && object.orbitClass !== orbitClass) return false;
+          if (anomalyOnly && object.anomalyScore < 0.35) return false;
+          return true;
+        });
 
-    return applyNaturalLanguageIntent(
-      propagated.filter((object) => {
-        if (objectType !== "all" && object.objectType !== objectType) return false;
-        if (orbitClass !== "all" && object.orbitClass !== orbitClass) return false;
-        if (anomalyOnly && object.anomalyScore < 0.35) return false;
-
-        if (!byText) return true;
-
-        return `${object.name} ${object.noradId} ${object.intlDesignator ?? ""} ${object.groups.join(" ")}`
-          .toLowerCase()
-          .includes(byText);
-      }),
-      intent
-    );
+    return applyNaturalLanguageIntent(baseObjects, intent);
   }, [propagated, query, objectType, orbitClass, anomalyOnly, intent]);
 
   const selected = useMemo(
@@ -250,7 +245,7 @@ export default function App() {
               </div>
 
               <label className="field">
-                <FieldLabel icon={<Search size={15} />} label="Search" help="Text search checks name, NORAD ID, international designator, and source groups." />
+                <FieldLabel icon={<Search size={15} />} label="Search" help="Search scans the whole loaded catalog by name, NORAD ID, international designator, source groups, object type, and orbit class." />
                 <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="NORAD, ISS, STARLINK, COSMOS" />
               </label>
 
@@ -258,12 +253,12 @@ export default function App() {
                 <FieldLabel
                   icon={<BrainCircuit size={15} />}
                   label="AI Command"
-                  help="Natural language filter. Try requests like debris in LEO, high risk objects, active Starlink, or a selected-object pass query."
+                  help="Natural language filter. Try requests like GEO satellites, UK satellites, high risk debris below 600 km, or a selected-object pass query."
                 />
                 <input
                   value={aiCommand}
                   onChange={(event) => setAiCommand(event.target.value)}
-                  placeholder="Filter objects, or ask: When will this object pass over Mountain View, California?"
+                  placeholder="Try: show GEO satellites, UK satellites, high risk debris, or pass over San Jose"
                 />
               </label>
               {aiAsksLocationPass && !selected ? (
@@ -682,6 +677,62 @@ function formatDateTime(value: string) {
     hour: "numeric",
     minute: "2-digit"
   });
+}
+
+function matchesCatalogSearch(object: PropagatedOrbitObject, query: string) {
+  const normalizedQuery = normalizeCatalogText(query);
+  if (!normalizedQuery) return true;
+
+  const haystack = normalizeCatalogText([
+    object.name,
+    object.noradId,
+    object.intlDesignator ?? "",
+    object.groups.join(" "),
+    object.source,
+    object.objectType,
+    object.orbitClass
+  ].join(" "));
+  const terms = expandedSearchTerms(normalizedQuery);
+
+  return terms.every((term) => haystack.includes(term));
+}
+
+function expandedSearchTerms(query: string) {
+  const aliases: Record<string, string[]> = {
+    hubble: ["hubble"],
+    hst: ["hubble"],
+    iss: ["iss"],
+    geo: ["geo"],
+    geostationary: ["geo"],
+    geosynchronous: ["geo"],
+    uk: ["uk"],
+    british: ["uk"],
+    "united kingdom": ["uk"],
+    gps: ["gps"],
+    navstar: ["gps"],
+    cosmos: ["cosmos"],
+    kosmos: ["cosmos"]
+  };
+
+  return query
+    .split(" ")
+    .filter(Boolean)
+    .flatMap((term) => aliases[term] ?? [term]);
+}
+
+function normalizeCatalogText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/\bu\.k\.\b/g, "uk")
+    .replace(/\bu\.s\.\b/g, "usa")
+    .replace(/\bunited kingdom\b/g, "uk")
+    .replace(/\bgeostationary\b/g, "geo")
+    .replace(/\bgeosynchronous\b/g, "geo")
+    .replace(/\bkosmos\b/g, "cosmos")
+    .replace(/r\/b/g, "rocket body")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function sourceLabel(source: ObjectImageResult["source"]) {

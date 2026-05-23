@@ -73,6 +73,7 @@ export interface NaturalLanguageIntent {
   objectTypes: ObjectType[];
   orbitClasses: OrbitClass[];
   textTokens: string[];
+  requiredTokens: string[];
   beforeYear: number | null;
   afterYear: number | null;
   anomalyOnly: boolean;
